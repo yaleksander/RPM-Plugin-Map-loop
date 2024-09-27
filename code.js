@@ -107,7 +107,7 @@ function futurePosAux(p, x, z, w, h, lx, lz)
 
 function isSpecialMesh(mesh)
 {
-	return (mesh.isInstancedMesh || mesh.isSkinnedMesh || mesh.isWater || mesh.isSky);
+	return (mesh.isInstancedMesh || mesh.isSkinnedMesh || mesh.isLight || mesh.isWater || mesh.isSky);
 }
 
 function isInScene(mesh)
@@ -129,7 +129,7 @@ function updateInstances(mesh, pos = new THREE.Vector3(0, 0, 0), rot = new THREE
 	pos.add(mesh.position);
 	rot.set(rot.x + mesh.rotation.x, rot.y + mesh.rotation.y, rot.z + mesh.rotation.z, "XYZ");
 	scale.multiply(mesh.scale);
-	if (mesh.mapLoopPlugin_isGLTFRoot)
+	if (mesh.mapLoopPlugin_isGLTFRoot || mesh.lightsPlugin_isLightGroup)
 	{
 		// instanced skinned meshes were getting too tangled in the scene graph
 		// fuck skeleton and bone local/world matrices
@@ -160,44 +160,51 @@ function updateInstances(mesh, pos = new THREE.Vector3(0, 0, 0), rot = new THREE
 		if (!m.mapLoopPlugin_loopZ)
 			mk = 1;
 		mesh.position.set((1 - mj) * x, 0, (1 - mk) * z);
+		if (mesh.lightsPlugin_isLightGroup)
+			for (var i = 0; i < mesh.children.length; i++)
+				if (mesh.children[i].isSpotLight)
+					mesh.children[i].target.position.set((1 - mj) * x, 0, (1 - mk) * z);
 	}
-	else if (!isSpecialMesh(mesh))
+	else
 	{
-		if (!mesh.mapLoopPlugin_hasClone)
+		if (!mesh.isGroup)
 		{
-			const inst = new THREE.InstancedMesh(mesh.geometry, mesh.material, 8);
-			inst.morphTargetInfluences = mesh.morphTargetInfluences;
-			inst.customDepthMaterial = mesh.customDepthMaterial;
-			inst.vertexColors = mesh.vertexColors;
-			inst.mapLoopPlugin_isClone = mesh;
-			mesh.mapLoopPlugin_hasClone = inst;
-			m.scene.add(inst);
-		}
-		const inst = mesh.mapLoopPlugin_hasClone;
-		var i = 0;
-		dummy.rotation.copy(rot);
-		for (var j = 0; j < 3; j++)
-		{
-			for (var k = 0; k < 3; k++)
+			if (!mesh.mapLoopPlugin_hasClone)
 			{
-				if (j * 3 + k === 4)
-					continue;
-				else
+				const inst = new THREE.InstancedMesh(mesh.geometry, mesh.material, 8);
+				inst.morphTargetInfluences = mesh.morphTargetInfluences;
+				inst.customDepthMaterial = mesh.customDepthMaterial;
+				inst.vertexColors = mesh.vertexColors;
+				inst.mapLoopPlugin_isClone = mesh;
+				mesh.mapLoopPlugin_hasClone = inst;
+				m.scene.add(inst);
+			}
+			const inst = mesh.mapLoopPlugin_hasClone;
+			var i = 0;
+			dummy.rotation.copy(rot);
+			for (var j = 0; j < 3; j++)
+			{
+				for (var k = 0; k < 3; k++)
 				{
-					if ((!m.mapLoopPlugin_loopX && j !== 1) || (!m.mapLoopPlugin_loopZ && k !== 1))
-						dummy.scale.set(0, 0, 0);
+					if (j * 3 + k === 4)
+						continue;
 					else
-						dummy.scale.copy(scale);
-					dummy.position.set((1 - j) * x + pos.x, pos.y, (1 - k) * z + pos.z);
-					dummy.updateMatrix();
-					inst.setMatrixAt(i++, dummy.matrix);
+					{
+						if ((!m.mapLoopPlugin_loopX && j !== 1) || (!m.mapLoopPlugin_loopZ && k !== 1))
+							dummy.scale.set(0, 0, 0);
+						else
+							dummy.scale.copy(scale);
+						dummy.position.set((1 - j) * x + pos.x, pos.y, (1 - k) * z + pos.z);
+						dummy.updateMatrix();
+						inst.setMatrixAt(i++, dummy.matrix);
+					}
 				}
 			}
+			inst.instanceMatrix.needsUpdate = true;
+			inst.castShadow = mesh.castShadow;
+			inst.receiveShadow = mesh.receiveShadow;
+			inst.customDistanceMaterial = mesh.customDistanceMaterial;
 		}
-		inst.instanceMatrix.needsUpdate = true;
-		inst.castShadow = mesh.castShadow;
-		inst.receiveShadow = mesh.receiveShadow;
-		inst.customDistanceMaterial = mesh.customDistanceMaterial;
 		for (var i = 0; i < mesh.children.length; i++)
 			updateInstances(mesh.children[i], pos.clone(), rot.clone(), scale.clone());
 	}
