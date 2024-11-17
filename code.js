@@ -112,6 +112,8 @@ function isSpecialMesh(mesh)
 
 function isInScene(mesh)
 {
+	if (!mesh)
+		return false;
 	if (mesh.parent === RPM.Scene.Map.current.scene)
 		return true;
 	if (isInScene(mesh.parent))
